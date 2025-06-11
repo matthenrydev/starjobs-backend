@@ -1,4 +1,5 @@
 const Job = require("../models/Job");
+const Application = require("../models/Application");
 const User = require("../models/User");
 
 // Get All Jobs
@@ -55,19 +56,13 @@ const getJobById = async (req, res) => {
 
 // Apply in Job
 const applyInJob = async (req, res) => {
-  const { jobId } = req.body;
+  const { jobId, howDidYouHear, coverLetter, resume } = req.body;
   const jobseekerId = req.user.id;
 
   try {
     const user = await User.findById(jobseekerId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    if (user.role !== "jobseeker") {
-      return res
-        .status(403)
-        .json({ message: "Only jobseekers can apply in jobs" });
+    if (!user || user.role !== "jobseeker") {
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
     const job = await Job.findById(jobId);
@@ -75,20 +70,35 @@ const applyInJob = async (req, res) => {
       return res.status(404).json({ message: "Job not found" });
     }
 
-    if (job.jobseekers.includes(jobseekerId)) {
-      return res
-        .status(400)
-        .json({ message: "Jobseeker is already applyed in this job" });
-    }
-
-    // Apply the jobseeker in a single operation
-    await Job.findByIdAndUpdate(jobId, {
-      $push: { jobseekers: jobseekerId },
+    const alreadyApplied = await Application.findOne({
+      job: jobId,
+      applicant: jobseekerId,
     });
 
-    res.json({ message: "Applied in job successfully" });
+    if (alreadyApplied) {
+      return res
+        .status(400)
+        .json({ message: "You have already applied for this job" });
+    }
+
+    const application = new Application({
+      job: jobId,
+      applicant: jobseekerId,
+      howDidYouHear,
+      coverLetter,
+      resume, // assumed to be a string (e.g. URL or plain text path)
+    });
+
+    await application.save();
+
+    // Optional: update job.jobseekers list
+    await Job.findByIdAndUpdate(jobId, {
+      $addToSet: { jobseekers: jobseekerId },
+    });
+
+    res.status(201).json({ message: "Application submitted successfully" });
   } catch (error) {
-    console.error("Error applying in job:", error);
+    console.error("Apply error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
