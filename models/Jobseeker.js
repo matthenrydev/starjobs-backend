@@ -19,6 +19,8 @@ const jobseekerSchema = new mongoose.Schema({
     }
   ],
   resume: { type: String },
+
+  savedJobs: [{ type: mongoose.Schema.Types.ObjectId, ref: "Job" }]
 });
 
 const Jobseeker = User.discriminator("jobseeker", jobseekerSchema);
